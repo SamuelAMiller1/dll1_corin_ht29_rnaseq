@@ -7,17 +7,17 @@ cp -r /N/project/OHagan_single_cell/ILMN_906_OHagan_BL_mRNAseq24_Dec2020/ /N/sla
 
 mkdir -p sequences
 
-mv ILMN_906_OHagan_BL_mRNAseq24_Dec2020/sequences/
+# Rename fastq directory to sequences
+
+mv ILMN_906_OHagan_BL_mRNAseq24_Dec2020/ sequences/
+
+# gunzip fastqs
 
 gunzip -r ./sequences
 
 # Activate Enviornment
 
 conda activate rnaseq
-
-#Unload system perl for compatibility with entrez-direct
-
-module unload perl
 
 ANNOTATION='ftp://ftp.ensembl.org/pub/release-99/gtf/homo_sapiens/Homo_sapiens.GRCh38.99.gtf.gz'
 ASSEMBLY='ftp://ftp.ensembl.org/pub/release-91/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'
@@ -34,11 +34,11 @@ mkdir -p genome
 
 # Download and unpack the genome assembly
 
-curl $ASSEMBLY|gunzip > ./genome/assembly.fasta
+curl $ASSEMBLY | gunzip > ./genome/assembly.fasta
 
 #Download and unpack the genome annotation
 
-curl $ANNOTATION|gunzip > ./genome/annotation.gtf
+curl $ANNOTATION | gunzip > ./genome/annotation.gtf
 
 #Create a directory to store the index
 
@@ -69,32 +69,35 @@ mkdir -p results/aligned
 
 FASTQS=($(find ./sequences -name "*\.fastq"))
 
-FASTQSONE=('echo ${FASTQS[@]} | sed 's/ /\n/g' | grep R1_001')
-FASTQSTWO=('echo ${FASTQS[@]} | sed 's/ /\n/g' | grep R2_001')
+FASTQSONE=($(echo ${FASTQS[@]} | grep "R1_001"))
+FASTQSTWO=($(echo ${FASTQS[@]} | grep "R2_001"))
 
-for n in ${0..23}; do
-R1=${FASTQSONE[${n}]}
-R2=${FASTQSTWO[${n}]}
+FASTQSONE=(`echo ${FASTQS[@]} | sed 's/ /\n/g' | grep R1_001`)
+FASTQSTWO=(`echo ${FASTQS[@]} | sed 's/ /\n/g' | grep R2_001`)
 
-PREFIX=results/aligned/$(basename ${FASTQS[@]} .fastq)_
+for n in {0..23}; do
 
-STAR \
---runThreadN 8 \
---runMode alignReads \
---genomeLoad \
---LoadAndKeep \
---genomeDir genome/index \
---readFilesIn ${R1} ${R2} \
---outFilesNamePrefix ${PREFIX} \
---outSAMtype BAM SortedByCoordinate
+ R1=${FASTQSONE[${n}]}
+ R2=${FASTQSTWO[${n}]}
+
+ PREFIX=results/aligned/$(basename ${R1} .fastq)_
+
+ STAR \
+	--runThreadN 10 \
+	--genomeDir genome/index \
+	--readFilesIn ${R1} ${R2} \
+	--outFileNamePrefix ${PREFIX} \
+	--outSAMtype BAM SortedByCoordinate
 done
+
+# To check mapping efficiency >> less <filename>.Log.final.out
 
 # Indexing the BAM files
 
 BAMS=($(find ./results/aligned -name "*\.bam"))
 
 for BAM in ${BAMS[@]}; do
-samtools index $BAM
+ samtools index $BAM
 done
 
 ####################
@@ -102,6 +105,24 @@ done
 ####################
 
 # Create an output directory for read counts
+
+mkdir -p results/counts
+
+# Count reads
+
+BAMS=$(find ./results/aligned -name "*\.bam")
+
+featureCounts \
+	-T 8 \
+	-s 1 \
+	-a genome/annotation.gtf \
+	-o results/counts/counts.tsv \
+	-t exon \
+	-g gene_name \
+	-p \
+	--largestOverlap \
+	--primary \
+	${BAMS}
 
 
 
