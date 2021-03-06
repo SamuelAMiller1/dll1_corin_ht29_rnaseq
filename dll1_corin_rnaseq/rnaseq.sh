@@ -65,15 +65,19 @@ STAR \
 
 mkdir -p results/aligned
 
-# Align the reads with STAR
+
+# Create array for FASTQ files
 
 FASTQS=($(find ./sequences -name "*\.fastq"))
 
-FASTQSONE=($(echo ${FASTQS[@]} | grep "R1_001"))
-FASTQSTWO=($(echo ${FASTQS[@]} | grep "R2_001"))
+
+#Subset FASTQ's in individual arrays for Read 1 and Read 2 
 
 FASTQSONE=(`echo ${FASTQS[@]} | sed 's/ /\n/g' | grep R1_001`)
 FASTQSTWO=(`echo ${FASTQS[@]} | sed 's/ /\n/g' | grep R2_001`)
+
+
+# Align the reads with STAR
 
 for n in {0..23}; do
 
@@ -92,19 +96,31 @@ done
 
 # To check mapping efficiency >> less <filename>.Log.final.out
 
-# Indexing the BAM files
+# Create array for bam files
 
 BAMS=($(find ./results/aligned -name "*\.bam"))
+
+
+# Sort the BAMS
+# Note: STAR sorts reads by coordinates, for PE fragments, the input bam files need to be re-sorted to take into account which read i#s aligning prior to indexing
+
+
+for BAM in ${BAMS[@]}; do
+  samtools sort -@ 7 -o results/aligned/$(basename $BAM .bam)_sorted.bam -O bam $BAM
+done
+
+
+# Index the bam files
 
 for BAM in ${BAMS[@]}; do
  samtools index $BAM
 done
 
+
 ####################
 ## Count Features ##
 ####################
 
-# Create an output directory for read counts
 
 mkdir -p results/counts
 
@@ -128,24 +144,3 @@ featureCounts \
 
 ##Additional test code...
 
-# Other test code for star alignment
-for ((n = 0; n < ${#FASTQSONE[23]}; n++)); do 
-R1=${FASTQSONE[${n}]} 
-R2=${FASTQSTWO[${n}]} 
-PREFIX=results/aligned/$(basename ${FASTQSONE[${@}]} .fastq)_ 
-STAR 
---runThreadN 8
---runMode alignReads
---genomeLoad
---LoadAndKeep 
---genomeDir genome/index 
---readFilesIn ${R1} ${R2} 
---outFileNamePrefix ${PREFIX} 
---outSAMtype BAM SortedByCoordinate 
-done
-
-## new test code under development for STAR alignment
-for i in *_R1_001.fastq; do
-PREFIX=results/aligned/$(basename ${i%_R1_001.fastq} .fastq)_
-STAR --runMode alignReads --genomeLoad  LoadAndKeep --readFilesCommand zcat --outSAMtype BAM SortedByCoordinate --genomeDir genome/index --readFilesIn $i ${i%_R1_001.fastq.}_R2.001.fastq --runThreadN 12 --outFileNamePrefix ${PREFIX}
-done
