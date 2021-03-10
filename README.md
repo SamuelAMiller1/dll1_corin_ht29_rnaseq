@@ -1,1 +1,1 @@
-# This repository contains scripts for the analysis of human RNA-seq datasets
+# Analysis of unpublished RNA-seq data for Miller et al., 2021
